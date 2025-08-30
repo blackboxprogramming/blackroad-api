@@ -1,0 +1,17 @@
+[Unit]
+Description=BlackRoad API (JSON-only)
+After=network.target
+
+[Service]
+Type=simple
+Environment=NODE_ENV=production
+Environment=PORT=4000
+WorkingDirectory=/srv/blackroad-api
+ExecStart=/usr/bin/node /srv/blackroad-api/server_json.js
+Restart=always
+RestartSec=2
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
