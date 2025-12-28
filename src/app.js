@@ -19,14 +19,26 @@ const webhookService = require("./services/webhook.service");
 const totpService = require("./services/totp.service");
 const agentControlService = require("./services/agent-control.service");
 const websocketService = require("./services/websocket.service");
+const groupService = require("./services/group.service");
+const schedulerService = require("./services/scheduler.service");
+const sessionService = require("./services/session.service");
+const notificationService = require("./services/notification.service");
+const permissionService = require("./services/permission.service");
 
 // Initialize database
 initDatabase();
 
-// Initialize service tables
+// Initialize service tables (v2.1)
 webhookService.initTable();
 totpService.initTable();
 agentControlService.initTable();
+
+// Initialize service tables (v2.2)
+groupService.initTable();
+schedulerService.initTable();
+sessionService.initTable();
+notificationService.initTable();
+permissionService.initTable();
 
 const app = express();
 const startedAt = new Date();
@@ -208,7 +220,9 @@ let server = null;
 const shutdown = (signal) => {
   logger.info({ signal }, "Shutting down gracefully...");
 
-  // Close WebSocket connections
+  // Stop background services
+  schedulerService.stop();
+  sessionService.stopCleanup();
   websocketService.close();
 
   if (server) {
@@ -246,6 +260,11 @@ const start = () => {
     // Initialize WebSocket server
     websocketService.init(server);
     logger.info({ path: "/ws" }, "WebSocket server initialized");
+
+    // Start background services
+    schedulerService.start();
+    sessionService.startCleanup();
+    logger.info("Background services started (scheduler, session cleanup)");
   });
   return server;
 };
