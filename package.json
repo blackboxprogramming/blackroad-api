@@ -1,9 +1,12 @@
 {
   "name": "blackroad-api",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "commonjs",
   "main": "src/app.js",
+  "bin": {
+    "blackroad": "./src/cli/index.js"
+  },
   "scripts": {
     "start": "node src/app.js",
     "start:legacy": "node server_json.js",
@@ -14,11 +17,14 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "db:reset": "rm -rf ./data && node -e \"require('./src/db').initDatabase()\"",
+    "db:migrate": "node src/db/migrate.js",
     "docker:build": "docker build -t blackroad-api .",
-    "docker:run": "docker run -p 4000:4000 --env-file .env blackroad-api"
+    "docker:run": "docker run -p 4000:4000 --env-file .env blackroad-api",
+    "cli": "node src/cli/index.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",
+    "commander": "^12.1.0",
     "compression": "^1.7.5",
     "cors": "^2.8.5",
     "express": "^4.19.2",
@@ -26,9 +32,12 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "otplib": "^12.0.1",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
+    "qrcode": "^1.5.4",
     "swagger-ui-express": "^5.0.1",
+    "ws": "^8.18.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

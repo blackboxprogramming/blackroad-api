@@ -14,8 +14,19 @@ const send = require("./utils/response");
 const openapi = require("./openapi");
 const v1Routes = require("./routes/v1");
 
+// Services for table initialization
+const webhookService = require("./services/webhook.service");
+const totpService = require("./services/totp.service");
+const agentControlService = require("./services/agent-control.service");
+const websocketService = require("./services/websocket.service");
+
 // Initialize database
 initDatabase();
+
+// Initialize service tables
+webhookService.initTable();
+totpService.initTable();
+agentControlService.initTable();
 
 const app = express();
 const startedAt = new Date();
@@ -116,6 +127,7 @@ app.get("/status", (req, res) =>
     uptime_seconds: Math.floor(process.uptime()),
     env: { node: process.version, mode: config.nodeEnv },
     database: "connected",
+    websocket: websocketService.getStats(),
   })
 );
 
@@ -195,6 +207,10 @@ let server = null;
 
 const shutdown = (signal) => {
   logger.info({ signal }, "Shutting down gracefully...");
+
+  // Close WebSocket connections
+  websocketService.close();
+
   if (server) {
     server.close((err) => {
       closeDb();
@@ -226,6 +242,10 @@ const start = () => {
   server = app.listen(config.port, () => {
     logger.info({ port: config.port, env: config.nodeEnv }, "BlackRoad API started");
     logger.info({ docs: `http://localhost:${config.port}/docs` }, "API documentation available");
+
+    // Initialize WebSocket server
+    websocketService.init(server);
+    logger.info({ path: "/ws" }, "WebSocket server initialized");
   });
   return server;
 };

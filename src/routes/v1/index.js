@@ -2,6 +2,8 @@ const express = require("express");
 const agentsRouter = require("./agents");
 const authRouter = require("./auth");
 const auditRouter = require("./audit");
+const webhooksRouter = require("./webhooks");
+const exportRouter = require("./export");
 
 const router = express.Router();
 
@@ -9,6 +11,8 @@ const router = express.Router();
 router.use("/agents", agentsRouter);
 router.use("/auth", authRouter);
 router.use("/audit", auditRouter);
+router.use("/webhooks", webhooksRouter);
+router.use("/export", exportRouter);
 
 // Echo endpoint (useful for testing)
 router.post("/echo", (req, res) => {

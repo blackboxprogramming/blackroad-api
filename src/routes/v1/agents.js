@@ -1,12 +1,42 @@
 const express = require("express");
 const agentService = require("../../services/agent.service");
 const auditService = require("../../services/audit.service");
+const agentControlService = require("../../services/agent-control.service");
 const send = require("../../utils/response");
 const { AgentSchema, AgentUpdateSchema, AgentQuerySchema, validate, validateQuery } = require("../../utils/validation");
 const { authenticate, optionalAuth, authorize } = require("../../middleware/auth");
 const { auditLogger } = require("../../middleware/logger");
+const { z } = require("zod");
 
 const router = express.Router();
+
+// Command validation schema
+const CommandSchema = z.object({
+  command: z.enum(["start", "stop", "restart", "ping", "configure", "update", "status"]),
+  payload: z.record(z.unknown()).optional().default({}),
+  expiresIn: z.number().min(10).max(86400).optional().default(300),
+});
+
+// Heartbeat validation schema
+const HeartbeatSchema = z.object({
+  status: z.enum(["healthy", "unhealthy", "starting", "stopping", "running", "idle"]).default("healthy"),
+  metrics: z.record(z.unknown()).optional().default({}),
+  version: z.string().optional(),
+});
+
+const validateBody = (schema) => (req, res, next) => {
+  const result = schema.safeParse(req.body);
+  if (!result.success) {
+    return send.bad(res, "Validation failed", {
+      errors: result.error.errors.map((e) => ({
+        field: e.path.join("."),
+        message: e.message,
+      })),
+    });
+  }
+  req.validated = result.data;
+  next();
+};
 
 // List all agents with pagination/filtering (public read, auth for metadata)
 router.get("/", optionalAuth, validateQuery(AgentQuerySchema), (req, res) => {
@@ -158,5 +188,141 @@ router.delete(
     }
   }
 );
+
+// ==================== Agent Control Commands ====================
+
+// Get agent health status
+router.get("/:id/health", optionalAuth, (req, res) => {
+  try {
+    const result = agentControlService.getAgentHealth(req.params.id);
+
+    if (result.error === "NOT_FOUND") {
+      return send.notFound(res, result.message);
+    }
+
+    send.ok(res, result);
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Issue command to agent
+router.post("/:id/commands", authenticate, validateBody(CommandSchema), (req, res) => {
+  try {
+    const { command, payload, expiresIn } = req.validated;
+    const result = agentControlService.issueCommand(
+      req.params.id,
+      command,
+      payload,
+      req.user.id,
+      expiresIn
+    );
+
+    if (result.error === "NOT_FOUND") {
+      return send.notFound(res, result.message);
+    }
+
+    if (result.error === "INVALID_COMMAND") {
+      return send.bad(res, result.message);
+    }
+
+    auditService.log({
+      userId: req.user.id,
+      action: "command",
+      resourceType: "agent",
+      resourceId: req.params.id,
+      newValue: { command, payload },
+      ipAddress: req.ip,
+      requestId: req.id,
+    });
+
+    send.created(res, result.data);
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Get pending commands for agent (used by agents polling for commands)
+router.get("/:id/commands/pending", authenticate, (req, res) => {
+  try {
+    const commands = agentControlService.getPendingCommands(req.params.id);
+    send.ok(res, commands);
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Acknowledge command execution
+router.post("/:id/commands/:commandId/ack", authenticate, (req, res) => {
+  try {
+    const { result, success = true } = req.body;
+    const ackResult = agentControlService.acknowledgeCommand(
+      parseInt(req.params.commandId),
+      result,
+      success
+    );
+
+    if (ackResult.error === "NOT_FOUND") {
+      return send.notFound(res, ackResult.message);
+    }
+
+    send.ok(res, ackResult.data);
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Get command history
+router.get("/:id/commands", authenticate, (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+
+    const result = agentControlService.getCommandHistory(req.params.id, { page, limit });
+    send.paginated(res, result.data, result.pagination);
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// ==================== Agent Heartbeat ====================
+
+// Record heartbeat from agent
+router.post("/:id/heartbeat", authenticate, validateBody(HeartbeatSchema), (req, res) => {
+  try {
+    const result = agentControlService.recordHeartbeat(req.params.id, {
+      ...req.validated,
+      ipAddress: req.ip,
+    });
+
+    if (result.error === "NOT_FOUND") {
+      return send.notFound(res, result.message);
+    }
+
+    // Return pending commands in response
+    const pendingCommands = agentControlService.getPendingCommands(req.params.id);
+
+    send.ok(res, {
+      recorded: true,
+      pendingCommands,
+    });
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Get heartbeat history
+router.get("/:id/heartbeats", authenticate, (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+
+    const result = agentControlService.getHeartbeatHistory(req.params.id, { page, limit, hours });
+    send.paginated(res, result.data, result.pagination);
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
 
 module.exports = router;

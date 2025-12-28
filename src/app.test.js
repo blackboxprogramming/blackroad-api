@@ -4,7 +4,7 @@ const request = require("supertest");
 process.env.NODE_ENV = "test";
 
 const { app, closeDb } = require("./app");
-const { resetDb, getDb } = require("./db");
+const { getDb } = require("./db");
 const authService = require("./services/auth.service");
 
 describe("BlackRoad API v2", () => {

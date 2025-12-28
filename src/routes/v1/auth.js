@@ -1,6 +1,7 @@
 const express = require("express");
 const authService = require("../../services/auth.service");
 const auditService = require("../../services/audit.service");
+const totpService = require("../../services/totp.service");
 const send = require("../../utils/response");
 const { LoginSchema, RegisterSchema, validate } = require("../../utils/validation");
 const { authenticate } = require("../../middleware/auth");
@@ -133,6 +134,164 @@ router.post("/refresh", authenticate, (req, res) => {
     send.ok(res, {
       token,
       expiresIn: require("../../config").jwtExpiresIn,
+    });
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// ==================== Two-Factor Authentication (2FA) ====================
+
+// Check 2FA status
+router.get("/2fa/status", authenticate, (req, res) => {
+  try {
+    const enabled = totpService.isEnabled(req.user.id);
+    send.ok(res, { enabled });
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Setup 2FA (generate secret and QR code)
+router.post("/2fa/setup", authenticate, async (req, res) => {
+  try {
+    const user = authService.findById(req.user.id);
+    if (!user) {
+      return send.notFound(res, "User not found");
+    }
+
+    const result = await totpService.setup(req.user.id, user.username);
+
+    if (result.error) {
+      return send.bad(res, result.error);
+    }
+
+    send.ok(res, {
+      secret: result.secret,
+      qrCode: result.qrCode,
+      message: result.message,
+    });
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Verify and enable 2FA
+router.post("/2fa/verify", authenticate, (req, res) => {
+  try {
+    const { code } = req.body;
+
+    if (!code || typeof code !== "string") {
+      return send.bad(res, "Verification code is required");
+    }
+
+    const result = totpService.verify(req.user.id, code);
+
+    if (result.error) {
+      return send.bad(res, result.error);
+    }
+
+    auditService.log({
+      userId: req.user.id,
+      action: "enable_2fa",
+      resourceType: "user",
+      resourceId: req.user.id,
+      ipAddress: req.ip,
+      requestId: req.id,
+    });
+
+    send.ok(res, {
+      enabled: true,
+      backupCodes: result.backupCodes,
+      message: result.message,
+    });
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Validate 2FA code (for protected operations)
+router.post("/2fa/validate", authenticate, (req, res) => {
+  try {
+    const { code } = req.body;
+
+    if (!code || typeof code !== "string") {
+      return send.bad(res, "Code is required");
+    }
+
+    const result = totpService.validate(req.user.id, code);
+
+    if (!result.valid) {
+      return send.unauthorized(res, "Invalid code");
+    }
+
+    send.ok(res, {
+      valid: true,
+      usedBackupCode: result.usedBackupCode || false,
+      remainingBackupCodes: result.remainingBackupCodes,
+    });
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Disable 2FA
+router.post("/2fa/disable", authenticate, (req, res) => {
+  try {
+    const { code } = req.body;
+
+    if (!code || typeof code !== "string") {
+      return send.bad(res, "Verification code is required");
+    }
+
+    const result = totpService.disable(req.user.id, code);
+
+    if (result.error) {
+      return send.bad(res, result.error);
+    }
+
+    auditService.log({
+      userId: req.user.id,
+      action: "disable_2fa",
+      resourceType: "user",
+      resourceId: req.user.id,
+      ipAddress: req.ip,
+      requestId: req.id,
+    });
+
+    send.ok(res, { disabled: true });
+  } catch (err) {
+    send.serverErr(res, err);
+  }
+});
+
+// Regenerate backup codes
+router.post("/2fa/backup-codes", authenticate, (req, res) => {
+  try {
+    const { code } = req.body;
+
+    if (!code || typeof code !== "string") {
+      return send.bad(res, "Verification code is required");
+    }
+
+    const result = totpService.regenerateBackupCodes(req.user.id, code);
+
+    if (result.error) {
+      return send.bad(res, result.error);
+    }
+
+    auditService.log({
+      userId: req.user.id,
+      action: "regenerate_backup_codes",
+      resourceType: "user",
+      resourceId: req.user.id,
+      ipAddress: req.ip,
+      requestId: req.id,
+    });
+
+    send.ok(res, {
+      backupCodes: result.backupCodes,
+      message: "New backup codes generated. Previous codes are now invalid.",
     });
   } catch (err) {
     send.serverErr(res, err);
