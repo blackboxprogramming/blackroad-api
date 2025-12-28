@@ -18,6 +18,13 @@ const templatesRouter = require("./templates");
 const searchRouter = require("./search");
 const healthRouter = require("./health");
 
+// v2.4 routes
+const workflowsRouter = require("./workflows");
+const alertsRouter = require("./alerts");
+const backupsRouter = require("./backups");
+const cacheRouter = require("./cache");
+const dependenciesRouter = require("./dependencies");
+
 const router = express.Router();
 
 // Mount v1 routes
@@ -39,6 +46,13 @@ router.use("/bulk", bulkRouter);
 router.use("/templates", templatesRouter);
 router.use("/search", searchRouter);
 router.use("/health", healthRouter);
+
+// v2.4 routes
+router.use("/workflows", workflowsRouter);
+router.use("/alerts", alertsRouter);
+router.use("/backups", backupsRouter);
+router.use("/cache", cacheRouter);
+router.use("/dependencies", dependenciesRouter);
 
 // Echo endpoint (useful for testing)
 router.post("/echo", (req, res) => {
