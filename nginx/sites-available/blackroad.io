@@ -32,6 +32,5 @@ server {
   add_header X-XSS-Protection "1; mode=block" always;
 
   access_log /var/log/nginx/blackroad.access.log;
-error_log  /var/log/nginx/blackroad.error.log warn;
-}
+  error_log  /var/log/nginx/blackroad.error.log warn;
 }
