@@ -11,6 +11,13 @@ const sessionsRouter = require("./sessions");
 const notificationsRouter = require("./notifications");
 const permissionsRouter = require("./permissions");
 
+// v2.3 routes
+const rateLimitsRouter = require("./ratelimits");
+const bulkRouter = require("./bulk");
+const templatesRouter = require("./templates");
+const searchRouter = require("./search");
+const healthRouter = require("./health");
+
 const router = express.Router();
 
 // Mount v1 routes
@@ -25,6 +32,13 @@ router.use("/dashboard", dashboardRouter);
 router.use("/sessions", sessionsRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/permissions", permissionsRouter);
+
+// v2.3 routes
+router.use("/ratelimits", rateLimitsRouter);
+router.use("/bulk", bulkRouter);
+router.use("/templates", templatesRouter);
+router.use("/search", searchRouter);
+router.use("/health", healthRouter);
 
 // Echo endpoint (useful for testing)
 router.post("/echo", (req, res) => {

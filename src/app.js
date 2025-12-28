@@ -25,6 +25,12 @@ const sessionService = require("./services/session.service");
 const notificationService = require("./services/notification.service");
 const permissionService = require("./services/permission.service");
 
+// v2.3 Services
+const rateLimitService = require("./services/ratelimit.service");
+const bulkService = require("./services/bulk.service");
+const templateService = require("./services/template.service");
+const healthService = require("./services/health.service");
+
 // Initialize database
 initDatabase();
 
@@ -39,6 +45,12 @@ schedulerService.initTable();
 sessionService.initTable();
 notificationService.initTable();
 permissionService.initTable();
+
+// Initialize service tables (v2.3)
+rateLimitService.initTable();
+bulkService.initTable();
+templateService.initTable();
+healthService.init();
 
 const app = express();
 const startedAt = new Date();
@@ -223,6 +235,8 @@ const shutdown = (signal) => {
   // Stop background services
   schedulerService.stop();
   sessionService.stopCleanup();
+  rateLimitService.stopCleanup();
+  healthService.stopPeriodicChecks();
   websocketService.close();
 
   if (server) {
@@ -264,7 +278,8 @@ const start = () => {
     // Start background services
     schedulerService.start();
     sessionService.startCleanup();
-    logger.info("Background services started (scheduler, session cleanup)");
+    rateLimitService.startCleanup();
+    logger.info("Background services started (scheduler, session cleanup, rate limit cleanup)");
   });
   return server;
 };
