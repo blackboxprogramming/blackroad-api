@@ -1,22 +1,38 @@
-# BlackRoad API
+# BlackRoad API v2
 
-A lightweight, JSON-only REST API server built with Express.js.
+A production-grade JSON REST API server built with Express.js, featuring authentication, SQLite persistence, and comprehensive observability.
 
-> **Note:** This repository is from the `blackboxprogramming` organization. Development has moved to the **BlackRoad-OS** organization. See [Canonical Repositories](#canonical-repositories) below.
+> **Note:** This repository is from the `blackboxprogramming` organization. See [Canonical Repositories](#canonical-repositories) for the main BlackRoad-OS project.
 
 ## Features
 
-- JSON-only API with standardized response envelopes
-- Full CRUD operations for Agents resource
-- Input validation with Zod schemas
-- Request ID tracing for all requests
-- Rate limiting (configurable)
-- Security headers via Helmet
-- CORS support with configurable origins
-- Graceful shutdown handling
-- Auto-discovered route listing
-- OpenAPI 3.1.0 specification
-- Comprehensive test suite
+### Core
+- **JSON-only API** with standardized response envelopes
+- **Full CRUD operations** for Agents resource
+- **Input validation** with Zod schemas
+- **SQLite persistence** with better-sqlite3
+
+### Security
+- **JWT Authentication** with Bearer tokens
+- **API Key support** for service-to-service auth
+- **Role-based authorization** (user/admin)
+- **Rate limiting** (configurable per-endpoint)
+- **Security headers** via Helmet
+- **CORS support** with configurable origins
+
+### Observability
+- **Structured logging** with Pino
+- **Request ID tracing** for all requests
+- **Prometheus metrics** endpoint
+- **Audit logging** for all mutations
+- **Health checks** with database status
+
+### Developer Experience
+- **Swagger UI** for interactive API docs
+- **OpenAPI 3.1.0** specification
+- **API versioning** (/api/v1/)
+- **Docker support** with docker-compose
+- **Comprehensive test suite** with Jest
 
 ## Quick Start
 
@@ -32,6 +48,8 @@ npm start
 ```
 
 The API will be available at `http://localhost:4000`
+- API Documentation: `http://localhost:4000/docs`
+- Metrics: `http://localhost:4000/metrics`
 
 ## Configuration
 
@@ -44,43 +62,103 @@ cp .env.example .env
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | 4000 | Server port |
-| `NODE_ENV` | production | Environment (development/production) |
-| `API_VERSION` | 1.0.0 | API version shown in responses |
-| `RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window (ms) |
-| `RATE_LIMIT_MAX_REQUESTS` | 120 | Max requests per window |
-| `CORS_ORIGINS` | * | Allowed origins (comma-separated) |
+| `NODE_ENV` | production | Environment |
+| `DB_PATH` | ./data/blackroad.db | SQLite database path |
+| `JWT_SECRET` | (random) | JWT signing secret (min 32 chars) |
+| `JWT_EXPIRES_IN` | 24h | Token expiration |
+| `RATE_LIMIT_MAX_REQUESTS` | 120 | Max requests per minute |
+| `CORS_ORIGINS` | * | Allowed origins |
+| `LOG_LEVEL` | info | Logging level |
+| `METRICS_ENABLED` | true | Enable Prometheus metrics |
 
 ## API Endpoints
 
-### Meta
+### System
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | API info and status |
-| GET | `/api/health` | Health check |
-| GET | `/api/status` | Server status (PID, memory, uptime) |
-| GET | `/api/routes` | List all routes |
-| GET | `/api/openapi.json` | OpenAPI specification |
+| GET | `/health` | Health check |
+| GET | `/status` | Server status |
+| GET | `/metrics` | Prometheus metrics |
+| GET | `/routes` | List all routes |
+| GET | `/docs` | Swagger UI |
+| GET | `/openapi.json` | OpenAPI spec |
 
-### Agents CRUD
+### Authentication (`/api/v1/auth`)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/agents` | List all agents |
-| GET | `/api/agents/:id` | Get agent by ID |
-| POST | `/api/agents` | Create new agent |
-| PUT | `/api/agents/:id` | Update agent |
-| DELETE | `/api/agents/:id` | Delete agent |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/register` | - | Register new user |
+| POST | `/login` | - | Login, get JWT token |
+| GET | `/me` | Required | Get current user |
+| POST | `/api-keys` | Required | Generate API key |
+| POST | `/refresh` | Required | Refresh JWT token |
 
-### Utility
+### Agents (`/api/v1/agents`)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/echo` | Echo request body |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/` | Optional | List agents (paginated) |
+| GET | `/:id` | Optional | Get agent by ID |
+| POST | `/` | Required | Create agent |
+| PUT | `/:id` | Required | Update agent |
+| PATCH | `/:id` | Required | Partial update |
+| DELETE | `/:id` | Admin | Delete agent |
+
+### Query Parameters (List Endpoints)
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `page` | int | Page number (default: 1) |
+| `limit` | int | Items per page (max: 100, default: 20) |
+| `sort` | string | Sort field (id, role, created_at) |
+| `order` | asc/desc | Sort order |
+| `role` | string | Filter by role |
+| `active` | bool | Filter by active status |
+| `search` | string | Search in id/role |
+
+### Audit (`/api/v1/audit`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/` | Admin | Get audit logs |
+
+## Authentication
+
+### JWT Token
+
+```bash
+# Register
+curl -X POST http://localhost:4000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"myuser","password":"MyPass123"}'
+
+# Login
+curl -X POST http://localhost:4000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"myuser","password":"MyPass123"}'
+
+# Use token
+curl http://localhost:4000/api/v1/agents \
+  -H "Authorization: Bearer <token>"
+```
+
+### API Key
+
+```bash
+# Generate API key (requires JWT auth)
+curl -X POST http://localhost:4000/api/v1/auth/api-keys \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-service","expiresIn":"30d"}'
+
+# Use API key
+curl http://localhost:4000/api/v1/agents \
+  -H "X-API-Key: br_..."
+```
 
 ## Response Format
-
-All responses follow a standardized envelope:
 
 ```json
 // Success
@@ -88,7 +166,16 @@ All responses follow a standardized envelope:
   "ok": true,
   "status": 200,
   "data": { ... },
-  "meta": { ... }
+  "meta": {
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 100,
+      "totalPages": 5,
+      "hasNext": true,
+      "hasPrev": false
+    }
+  }
 }
 
 // Error
@@ -96,15 +183,11 @@ All responses follow a standardized envelope:
   "ok": false,
   "status": 400,
   "error": {
-    "message": "Error description",
-    "details": { ... }
+    "message": "Validation failed",
+    "details": { "errors": [...] }
   }
 }
 ```
-
-## Request Tracing
-
-All requests include an `X-Request-Id` header in responses. You can provide your own ID via the `X-Request-Id` request header.
 
 ## Development
 
@@ -112,60 +195,105 @@ All requests include an `X-Request-Id` header in responses. You can provide your
 # Run tests
 npm test
 
-# Run tests with watch mode
+# Run tests with watch
 npm run test:watch
 
-# Run linter
+# Lint code
 npm run lint
-
-# Fix linting issues
-npm run lint:fix
 
 # Format code
 npm run format
+
+# Reset database
+npm run db:reset
+```
+
+## Docker
+
+```bash
+# Build image
+npm run docker:build
+
+# Run container
+npm run docker:run
+
+# Or use docker-compose
+docker-compose up -d
+
+# With nginx proxy
+docker-compose --profile with-nginx up -d
 ```
 
 ## Deployment
 
-### systemd
-
-A systemd service file is provided in `systemd/blackroad-api.service`.
+### Docker (Recommended)
 
 ```bash
-# Copy service file
-sudo cp systemd/blackroad-api.service /etc/systemd/system/
+# Create .env file
+cp .env.example .env
+# Edit .env with production values
 
-# Enable and start
+# Start with docker-compose
+docker-compose up -d
+```
+
+### systemd
+
+```bash
+sudo cp systemd/blackroad-api.service /etc/systemd/system/
 sudo systemctl enable blackroad-api
 sudo systemctl start blackroad-api
 ```
 
 ### Nginx
 
-An Nginx configuration is provided in `nginx/sites-available/blackroad.io`.
-
 ```bash
-# Copy and link config
 sudo cp nginx/sites-available/blackroad.io /etc/nginx/sites-available/
 sudo ln -s /etc/nginx/sites-available/blackroad.io /etc/nginx/sites-enabled/
-
-# Test and reload
-sudo nginx -t
-sudo systemctl reload nginx
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ## Tech Stack
 
 - **Runtime:** Node.js 18+
 - **Framework:** Express.js
+- **Database:** SQLite (better-sqlite3)
+- **Auth:** JWT (jsonwebtoken)
 - **Validation:** Zod
-- **Security:** Helmet, CORS, Rate Limiting
+- **Logging:** Pino
+- **Docs:** Swagger UI
 - **Testing:** Jest, Supertest
-- **Linting:** ESLint, Prettier
+- **Containerization:** Docker
+
+## Architecture
+
+```
+src/
+├── app.js              # Main application entry
+├── config/             # Configuration management
+├── db/                 # Database layer (SQLite)
+├── middleware/         # Express middleware
+│   ├── auth.js        # JWT/API key authentication
+│   ├── logger.js      # Request logging
+│   └── metrics.js     # Prometheus metrics
+├── routes/
+│   └── v1/            # API v1 routes
+│       ├── agents.js
+│       ├── auth.js
+│       └── audit.js
+├── services/          # Business logic
+│   ├── agent.service.js
+│   ├── auth.service.js
+│   └── audit.service.js
+├── utils/             # Helpers
+│   ├── response.js
+│   └── validation.js
+└── openapi.js         # OpenAPI specification
+```
 
 ## Canonical Repositories
 
-Development has moved to the BlackRoad-OS organization:
+This is part of the BlackRoad ecosystem:
 
 | Purpose | Repository |
 |---------|------------|
@@ -174,7 +302,6 @@ Development has moved to the BlackRoad-OS organization:
 | Operator | [blackroad-os-operator](https://github.com/BlackRoad-OS/blackroad-os-operator) |
 | Agents | [blackroad-os-agents](https://github.com/BlackRoad-OS/blackroad-os-agents) |
 | API Gateway | [blackroad-os-api-gateway](https://github.com/BlackRoad-OS/blackroad-os-api-gateway) |
-| Documentation | [blackroad-os-docs](https://github.com/BlackRoad-OS/blackroad-os-docs) |
 
 ## License
 

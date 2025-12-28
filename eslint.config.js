@@ -1,6 +1,6 @@
 module.exports = [
   {
-    ignores: ["node_modules/**", "coverage/**"],
+    ignores: ["node_modules/**", "coverage/**", "data/**"],
   },
   {
     files: ["**/*.js"],
@@ -11,9 +11,15 @@ module.exports = [
         console: "readonly",
         process: "readonly",
         setTimeout: "readonly",
+        setInterval: "readonly",
+        clearTimeout: "readonly",
+        clearInterval: "readonly",
+        Buffer: "readonly",
         module: "readonly",
         require: "readonly",
+        exports: "readonly",
         __dirname: "readonly",
+        __filename: "readonly",
         describe: "readonly",
         it: "readonly",
         expect: "readonly",
@@ -21,6 +27,7 @@ module.exports = [
         afterEach: "readonly",
         beforeAll: "readonly",
         afterAll: "readonly",
+        jest: "readonly",
       },
     },
     rules: {
