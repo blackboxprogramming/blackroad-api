@@ -4,21 +4,23 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  deploy:
+  deploy-cloudflare:
     runs-on: ubuntu-latest
+    if: ${{ vars.DEPLOY_TARGET == 'cloudflare' || vars.DEPLOY_TARGET == 'all' }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Cloudflare
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::notice::CLOUDFLARE_API_TOKEN not set. Skipping deploy."
-            exit 0
-          fi
-          if [ -f "wrangler.toml" ]; then
-            npx wrangler deploy --env production
-          else
-            echo "::notice::No wrangler.toml found. Skipping deploy."
-          fi
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@392082e81ffbcb9ebdde27400634aa004b35ea37 # v3.14.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env production

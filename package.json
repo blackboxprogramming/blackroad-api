@@ -4,15 +4,21 @@
   "private": true,
   "type": "commonjs",
   "main": "server_json.js",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
-    "start": "node server_json.js"
+    "start": "node server_json.js",
+    "test": "node --test 'test/**/*.test.js'",
+    "lint": "node --check server_json.js worker.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "dependencies": {
-    "compression": "^1.7.5",
-    "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "express-rate-limit": "^7.1.5",
-    "helmet": "^7.1.0",
-    "morgan": "^1.10.0"
+    "compression": "1.7.5",
+    "cors": "2.8.5",
+    "express": "4.21.2",
+    "express-rate-limit": "7.5.0",
+    "helmet": "8.0.0",
+    "morgan": "1.10.0"
   }
 }

@@ -181,6 +181,10 @@ app.use((err, req, res, _next) => {
 /** ---------------------------
  *  Start
  *  --------------------------- */
-app.listen(PORT, () => {
-  console.log(`[BlackRoad] JSON API listening on :${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[BlackRoad] JSON API listening on :${PORT}`);
+  });
+}
+
+module.exports = app;
